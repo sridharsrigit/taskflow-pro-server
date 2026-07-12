@@ -11,6 +11,7 @@ namespace TaskFlowPro.Infrastructure.Data
         public DbSet<TaskItem>    Tasks        => Set<TaskItem>();
         public DbSet<Comment>     Comments     => Set<Comment>();
         public DbSet<TaskHistory> TaskHistories => Set<TaskHistory>();
+        public DbSet<Notification> Notifications => Set<Notification>();
 
         protected override void OnModelCreating(ModelBuilder mb)
         {
@@ -54,6 +55,15 @@ namespace TaskFlowPro.Infrastructure.Data
                 e.Property(h => h.ChangedByName).IsRequired().HasMaxLength(100);
                 e.HasOne(h => h.Task).WithMany(t => t.History)
                  .HasForeignKey(h => h.TaskId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            mb.Entity<Notification>(e => {
+                e.HasKey(n => n.Id);
+                e.Property(n => n.Title).IsRequired().HasMaxLength(200);
+                e.Property(n => n.Message).IsRequired().HasMaxLength(1000);
+                e.Property(n => n.Type).HasMaxLength(50);
+                e.HasOne(n => n.User).WithMany()
+                 .HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

@@ -6,6 +6,7 @@ using TaskFlowPro.Core.Interfaces;
 using TaskFlowPro.Infrastructure.Data;
 using TaskFlowPro.Infrastructure.Repositories;
 using TaskFlowPro.Infrastructure.Services;
+using TaskFlowPro.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +26,7 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ITaskRepository, TaskRepository>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<AiService>();
+builder.Services.AddHostedService<TaskFlowPro.API.Services.OverdueTaskNotifierService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>

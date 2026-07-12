@@ -14,13 +14,16 @@ namespace TaskFlowPro.API.Controllers
     {
         private readonly ITaskRepository _tasks;
         private readonly IUserRepository _users;
+        private readonly TaskFlowPro.Infrastructure.Data.AppDbContext _db;
 
         public TasksController(
             ITaskRepository tasks,
-            IUserRepository users)
+            IUserRepository users,
+            TaskFlowPro.Infrastructure.Data.AppDbContext db)
         {
             _tasks = tasks;
             _users = users;
+            _db = db;
         }
 
         // ── GET ALL TASKS ─────────────────────────────────────
@@ -96,6 +99,20 @@ namespace TaskFlowPro.API.Controllers
             };
 
             var created = await _tasks.CreateAsync(task);
+
+            // Create notification for assignee
+            if (req.AssignedToId != createdById)
+            {
+                _db.Notifications.Add(new Notification
+                {
+                    UserId = req.AssignedToId,
+                    Title = "New Task Assigned",
+                    Message = $"You have been assigned a new task: {req.Title}",
+                    Type = "TaskAssigned"
+                });
+                await _db.SaveChangesAsync();
+            }
+
             return CreatedAtAction(nameof(GetById),
                 new { id = created.Id },
                 MapToResponse(created));
@@ -139,9 +156,25 @@ namespace TaskFlowPro.API.Controllers
 
             var changedByName = ClaimsHelper.GetUserName(User);
 
+            bool reassigned = req.AssignedToId.HasValue && req.AssignedToId.Value != existing.AssignedToId;
+            var oldAssignee = existing.AssignedToId;
+
             try
             {
                 var updated = await _tasks.UpdateAsync(existing, changedByName);
+
+                if (reassigned)
+                {
+                    _db.Notifications.Add(new Notification
+                    {
+                        UserId = updated.AssignedToId,
+                        Title = "Task Assigned",
+                        Message = $"You have been assigned the task: {updated.Title}",
+                        Type = "TaskAssigned"
+                    });
+                    await _db.SaveChangesAsync();
+                }
+
                 return Ok(MapToResponse(updated));
             }
             catch (Exception ex)
@@ -182,6 +215,20 @@ namespace TaskFlowPro.API.Controllers
             };
 
             var created = await _tasks.AddCommentAsync(comment);
+
+            if (task.AssignedToId != userId)
+            {
+                var user = await _users.GetByIdAsync(userId);
+                _db.Notifications.Add(new Notification
+                {
+                    UserId = task.AssignedToId,
+                    Title = "New Comment",
+                    Message = $"{user?.Name ?? "Someone"} commented on your task: {task.Title}",
+                    Type = "NewComment"
+                });
+                await _db.SaveChangesAsync();
+            }
+
             return Ok(new
             {
                 created.Id,

@@ -159,5 +159,57 @@ namespace TaskFlowPro.API.Controllers
                 .OrderByDescending(x =>
                     ((dynamic)x).activeTasks));
         }
+
+        // ── WEEKLY REPORT ─────────────────────────────────────
+        // GET /api/reports/weekly
+        [HttpGet("weekly")]
+        public async Task<IActionResult> GetWeeklyReport()
+        {
+            var tasks = await _tasks.GetAllAsync();
+            var taskList = tasks.ToList();
+            var employees = await _users.GetEmployeesAsync();
+
+            var now = DateTime.UtcNow;
+            var oneWeekAgo = now.AddDays(-7);
+            var twoWeeksAgo = now.AddDays(-14);
+
+            var completedThisWeek = taskList.Count(t => t.Status == Core.Enums.TaskStatus.Done && t.CompletedAt >= oneWeekAgo);
+            var completedLastWeek = taskList.Count(t => t.Status == Core.Enums.TaskStatus.Done && t.CompletedAt >= twoWeeksAgo && t.CompletedAt < oneWeekAgo);
+            
+            var createdThisWeek = taskList.Count(t => t.CreatedAt >= oneWeekAgo);
+
+            // Average completion time (in days)
+            var completedTasksThisWeek = taskList.Where(t => t.Status == Core.Enums.TaskStatus.Done && t.CompletedAt >= oneWeekAgo).ToList();
+            var avgCompletionDays = completedTasksThisWeek.Any() 
+                ? completedTasksThisWeek.Average(t => (t.CompletedAt!.Value - t.CreatedAt).TotalDays)
+                : 0;
+
+            // Best performing employee
+            var bestEmployee = employees
+                .Select(e => new { 
+                    Name = e.Name, 
+                    Completed = taskList.Count(t => t.AssignedToId == e.Id && t.Status == Core.Enums.TaskStatus.Done && t.CompletedAt >= oneWeekAgo) 
+                })
+                .OrderByDescending(x => x.Completed)
+                .FirstOrDefault();
+
+            // Most overdue department
+            var overdueByDept = taskList
+                .Where(t => t.DueDate < now && t.Status != Core.Enums.TaskStatus.Done)
+                .GroupBy(t => employees.FirstOrDefault(e => e.Id == t.AssignedToId)?.Department ?? "Unknown")
+                .Select(g => new { Department = g.Key, Count = g.Count() })
+                .OrderByDescending(x => x.Count)
+                .FirstOrDefault();
+
+            return Ok(new
+            {
+                completedThisWeek,
+                completedLastWeek,
+                createdThisWeek,
+                avgCompletionDays = Math.Round(avgCompletionDays, 1),
+                bestEmployee = bestEmployee?.Name ?? "N/A",
+                mostOverdueDepartment = overdueByDept?.Department ?? "N/A"
+            });
+        }
     }
 }
